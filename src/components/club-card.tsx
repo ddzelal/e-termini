@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Heart } from "lucide-react";
+import { MapPin, Heart, ImageOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { GlareHover } from "@/components/ui/glare-hover";
@@ -13,6 +13,41 @@ import { SPORT_LABELS } from "@/lib/constants";
 import type { Database } from "@/lib/database.types";
 
 type SportType = Database["public"]["Enums"]["sport_type"];
+
+function CardImage({ imageUrl, name }: { imageUrl?: string | null; name: string }) {
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  if (!imageUrl || error) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
+        {error ? (
+          <>
+            <ImageOff className="h-6 w-6 text-muted-foreground/30" />
+            <span className="mt-1 text-[10px] text-muted-foreground/40">Slika nedostupna</span>
+          </>
+        ) : (
+          <span className="text-5xl font-bold text-primary/20">{name.charAt(0)}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {loading && (
+        <div className="absolute inset-0 animate-pulse bg-muted" />
+      )}
+      <img
+        src={imageUrl}
+        alt={name}
+        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        onError={() => setError(true)}
+        onLoad={() => setLoading(false)}
+      />
+    </>
+  );
+}
 
 interface ClubCardProps {
   slug: string;
@@ -77,19 +112,7 @@ export function ClubCard({
           <div className="group w-full overflow-hidden rounded-2xl border border-border/50 bg-card transition-shadow duration-300 hover:shadow-lg hover:shadow-primary/5 dark:border-white/10 dark:hover:border-white/15">
             {/* Image */}
             <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={name}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
-                  <span className="text-5xl font-bold text-primary/20">
-                    {name.charAt(0)}
-                  </span>
-                </div>
-              )}
+              <CardImage imageUrl={imageUrl} name={name} />
 
               {/* Gradient overlay on bottom of image */}
               <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent" />

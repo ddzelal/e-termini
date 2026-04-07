@@ -30,6 +30,7 @@ import { ClubHeroBackground } from "./club-hero-bg";
 import { SPORT_LABELS, AMENITY_LABELS, SURFACE_LABELS, DAY_LABELS } from "@/lib/constants";
 import { AvailabilitySection } from "./availability-section";
 import { FavoriteButton } from "./favorite-button";
+import { ClubGallery } from "./club-gallery";
 import type { Database } from "@/lib/database.types";
 
 type SportType = Database["public"]["Enums"]["sport_type"];
@@ -231,6 +232,16 @@ export default async function ClubPage({ params }: ClubPageProps) {
                     {club.description}
                   </p>
                 </section>
+              </BlurFade>
+            )}
+
+            {/* Photo gallery */}
+            {club.club_images && club.club_images.length > 0 && (
+              <BlurFade delay={0.25} inView>
+                <ClubGallery
+                  images={club.club_images.sort((a, b) => a.position - b.position)}
+                  clubName={club.name}
+                />
               </BlurFade>
             )}
           </div>
