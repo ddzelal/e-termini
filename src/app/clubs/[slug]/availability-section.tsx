@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays, subDays } from "date-fns";
+import { format, addDays, isToday, isBefore, startOfDay } from "date-fns";
 import { sr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Loader2, Check, Calendar, MapPin } from "lucide-react";
+import { Loader2, Check, Calendar, MapPin, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,11 @@ interface AvailabilitySectionProps {
   sports: SportType[];
 }
 
+const SPORT_ICONS: Record<string, string> = {
+  football: "⚽", basketball: "🏀", tennis: "🎾", padel: "🏓",
+  volleyball: "🏐", handball: "🤾", futsal: "⚽", other: "🏅",
+};
+
 export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySectionProps) {
   const router = useRouter();
   const [date, setDate] = useState(new Date());
@@ -49,13 +54,18 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Booking flow state
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [booking, setBooking] = useState(false);
   const [bookingResult, setBookingResult] = useState<"success" | "error" | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
+
+  // Generate next 7 days for date picker
+  const days = useMemo(() => {
+    const today = startOfDay(new Date());
+    return Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  }, []);
 
   useEffect(() => {
     async function fetchAvailability() {
@@ -72,17 +82,69 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
     fetchAvailability();
   }, [clubId, date, selectedSport]);
 
+  // Group slots by court, then by full hour
+  const courts = useMemo(() => {
+    const grouped: Record<string, { name: string; sport: SportType; hours: Record<number, Slot[]> }> = {};
+
+    for (const slot of slots) {
+      if (!grouped[slot.court_id]) {
+        grouped[slot.court_id] = { name: slot.court_name, sport: slot.court_sport_type, hours: {} };
+      }
+      const hour = parseInt(slot.slot_start_time.split(":")[0]);
+      if (!grouped[slot.court_id].hours[hour]) {
+        grouped[slot.court_id].hours[hour] = [];
+      }
+      grouped[slot.court_id].hours[hour].push(slot);
+    }
+
+    return grouped;
+  }, [slots]);
+
+  // Get all unique hours across all courts
+  const allHours = useMemo(() => {
+    const hourSet = new Set<number>();
+    for (const court of Object.values(courts)) {
+      for (const h of Object.keys(court.hours)) {
+        hourSet.add(parseInt(h));
+      }
+    }
+    return [...hourSet].sort((a, b) => a - b);
+  }, [courts]);
+
+  // Get hour status: check all slots within that hour
+  function getHourStatus(courtId: string, hour: number): "available" | "booked" | "blocked" | "partial" {
+    const hourSlots = courts[courtId]?.hours[hour];
+    if (!hourSlots || hourSlots.length === 0) return "blocked";
+
+    const statuses = hourSlots.map((s) => s.slot_status);
+    if (statuses.every((s) => s === "booked")) return "booked";
+    if (statuses.every((s) => s === "blocked")) return "blocked";
+    if (statuses.every((s) => s === "available")) return "available";
+    // Mix of available + booked/blocked
+    return statuses.some((s) => s === "available") ? "partial" : "booked";
+  }
+
+  // Get first available slot for a given hour
+  function getAvailableSlot(courtId: string, hour: number): Slot | null {
+    const hourSlots = courts[courtId]?.hours[hour];
+    return hourSlots?.find((s) => s.slot_status === "available") ?? null;
+  }
+
+  // Get price for hour (first slot's price)
+  function getHourPrice(courtId: string, hour: number): number | null {
+    const hourSlots = courts[courtId]?.hours[hour];
+    const available = hourSlots?.find((s) => s.slot_status === "available");
+    return available?.slot_price ?? null;
+  }
+
   async function handleSlotClick(slot: Slot) {
-    // Check if user is logged in
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-
     if (!user) {
       setSelectedSlot(slot);
       setAuthOpen(true);
       return;
     }
-
     setSelectedSlot(slot);
     setBookingResult(null);
     setBookingError(null);
@@ -120,7 +182,6 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
       setBookingResult("error");
     } else {
       setBookingResult("success");
-      // Fire confetti celebration
       const end = Date.now() + 500;
       const frame = () => {
         confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } });
@@ -128,7 +189,6 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
         if (Date.now() < end) requestAnimationFrame(frame);
       };
       frame();
-      // Refresh availability
       const supabase = createClient();
       const { data } = await supabase.rpc("get_club_availability", {
         p_club_id: clubId,
@@ -139,146 +199,197 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
     }
   }
 
-  // Group by court
-  const grouped = slots.reduce<Record<string, { name: string; sport: SportType; slots: Slot[] }>>(
-    (acc, slot) => {
-      if (!acc[slot.court_id]) {
-        acc[slot.court_id] = { name: slot.court_name, sport: slot.court_sport_type, slots: [] };
-      }
-      acc[slot.court_id].slots.push(slot);
-      return acc;
-    },
-    {}
-  );
-
-  const isPast = format(date, "yyyy-MM-dd") < format(new Date(), "yyyy-MM-dd");
-
   return (
     <>
       <section>
-        <h2 className="mb-4 text-lg font-semibold">Dostupni termini</h2>
+        <h2 className="mb-5 text-lg font-semibold">Dostupni termini</h2>
 
-        {/* Sport filter */}
-        {sports.length > 1 && (
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            <Button
-              variant={!selectedSport ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedSport(undefined)}
-            >
-              Svi sportovi
-            </Button>
-            {sports.map((sport) => (
-              <Button
-                key={sport}
-                variant={selectedSport === sport ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedSport(sport)}
+        {/* Date picker — horizontal scroll of 7 days */}
+        <div className="mb-5 grid grid-cols-7 gap-1.5 sm:gap-2">
+          {days.map((day) => {
+            const selected = format(day, "yyyy-MM-dd") === format(date, "yyyy-MM-dd");
+            const today = isToday(day);
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => setDate(day)}
+                className={`flex flex-col items-center rounded-xl border py-2 sm:py-2.5 text-center transition-all ${
+                  selected
+                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-border/50 hover:border-border hover:bg-muted/50 dark:border-white/10 dark:hover:border-white/20"
+                }`}
               >
+                <span className={`text-[10px] sm:text-[11px] uppercase tracking-wider ${selected ? "text-primary font-semibold" : "text-muted-foreground"}`}>
+                  {today ? "Danas" : format(day, "EEEEE", { locale: sr })}
+                </span>
+                <span className={`text-base sm:text-lg font-bold leading-tight ${selected ? "" : "text-foreground"}`}>
+                  {format(day, "d")}
+                </span>
+                <span className={`text-[10px] sm:text-[11px] ${selected ? "text-primary" : "text-muted-foreground"} hidden sm:block`}>
+                  {format(day, "MMM", { locale: sr })}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sport filter tabs */}
+        {sports.length > 1 && (
+          <div className="mb-5 flex gap-1.5 overflow-x-auto pb-1">
+            <button
+              onClick={() => setSelectedSport(undefined)}
+              className={`shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+                !selectedSport
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:border-white/10"
+              }`}
+            >
+              Svi
+            </button>
+            {sports.map((sport) => (
+              <button
+                key={sport}
+                onClick={() => setSelectedSport(selectedSport === sport ? undefined : sport)}
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+                  selectedSport === sport
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:border-white/10"
+                }`}
+              >
+                <span className="text-sm leading-none">{SPORT_ICONS[sport]}</span>
                 {SPORT_LABELS[sport]}
-              </Button>
+              </button>
             ))}
           </div>
         )}
 
-        {/* Date navigator */}
-        <div className="mb-6 flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => setDate(subDays(date, 1))}
-            disabled={isPast}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[160px] text-center font-medium capitalize">
-            {format(date, "EEEE, d. MMM", { locale: sr })}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => setDate(addDays(date, 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Slots */}
+        {/* Timeline grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : Object.keys(grouped).length === 0 ? (
-          <div className="rounded-lg border border-dashed py-12 text-center">
-            <p className="text-muted-foreground">Nema termina za ovaj dan</p>
+        ) : Object.keys(courts).length === 0 ? (
+          <div className="rounded-2xl border border-dashed py-16 text-center">
+            <div className="text-3xl mb-2">📅</div>
+            <p className="font-medium">Nema termina za ovaj dan</p>
+            <p className="mt-1 text-sm text-muted-foreground">Probaj drugi datum</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Legend */}
-            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded border" />
-                <span>Slobodno</span>
+                <div className="h-3 w-6 rounded-sm border border-primary/30 bg-primary/10" />
+                Slobodno
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded border-red-200 bg-red-50 border dark:border-red-900/30 dark:bg-red-950/20" />
-                <span>Zauzeto</span>
+                <div className="h-3 w-6 rounded-sm border border-red-200 bg-red-100 dark:border-red-900/30 dark:bg-red-950/30" />
+                Zauzeto
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded bg-muted/50 border border-muted" />
-                <span>Blokirano</span>
+                <div className="h-3 w-6 rounded-sm bg-muted border border-border/50" />
+                Blokirano
               </div>
             </div>
 
-            {Object.entries(grouped).map(([courtId, court]) => (
-              <div key={courtId}>
-                <div className="mb-2 flex items-center gap-2">
-                  <h3 className="font-medium">{court.name}</h3>
-                  <Badge variant="outline" className="text-xs">
-                    {SPORT_LABELS[court.sport]}
-                  </Badge>
-                </div>
-                <motion.div
-                  className="flex flex-wrap gap-2"
-                  initial="hidden"
-                  animate="visible"
-                  variants={{ visible: { transition: { staggerChildren: 0.02 } } }}
-                >
-                  {court.slots.map((slot) => {
-                    const isAvailable = slot.slot_status === "available";
-                    const isBooked = slot.slot_status === "booked";
+            {/* Per court timeline */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={format(date, "yyyy-MM-dd") + (selectedSport ?? "")}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-5"
+              >
+                {Object.entries(courts).map(([courtId, court]) => (
+                  <div key={courtId} className="rounded-2xl border border-border/50 p-3 sm:p-4 dark:border-white/10">
+                    <div className="mb-2.5 sm:mb-3 flex items-center gap-2">
+                      <span className="text-sm leading-none">{SPORT_ICONS[court.sport]}</span>
+                      <h3 className="font-semibold text-sm">{court.name}</h3>
+                    </div>
 
-                    return (
-                      <motion.button
-                        key={`${courtId}-${slot.slot_start_time}`}
-                        variants={{
-                          hidden: { opacity: 0, scale: 0.8 },
-                          visible: { opacity: 1, scale: 1 },
-                        }}
-                        onClick={() => isAvailable && handleSlotClick(slot)}
-                        disabled={!isAvailable}
-                        className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                          isAvailable
-                            ? "hover:border-primary hover:bg-primary/5 active:scale-95 cursor-pointer"
-                            : isBooked
-                              ? "border-red-200 bg-red-50 text-red-400 cursor-not-allowed dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-500/60"
-                              : "border-muted bg-muted/50 text-muted-foreground/50 cursor-not-allowed"
-                        }`}
-                      >
-                        <div className="font-medium">{slot.slot_start_time.slice(0, 5)}</div>
-                        <div className="text-xs">
-                          {isBooked
-                            ? "Zauzeto"
-                            : slot.slot_status === "blocked"
-                              ? "Blokirano"
-                              : `${slot.slot_price.toLocaleString()} RSD`}
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </motion.div>
-              </div>
-            ))}
+                    {/* Desktop: horizontal grid */}
+                    <div className="hidden sm:grid gap-1.5" style={{ gridTemplateColumns: `repeat(${allHours.length}, minmax(0, 1fr))` }}>
+                      {allHours.map((hour) => {
+                        const status = getHourStatus(courtId, hour);
+                        const price = getHourPrice(courtId, hour);
+                        const slot = getAvailableSlot(courtId, hour);
+                        const isAvailable = status === "available" || status === "partial";
+                        const isBooked = status === "booked";
+
+                        return (
+                          <button
+                            key={hour}
+                            disabled={!isAvailable}
+                            onClick={() => slot && handleSlotClick(slot)}
+                            className={`group relative flex flex-col items-center rounded-xl py-2.5 px-1 text-center transition-all ${
+                              isAvailable
+                                ? "border border-primary/20 bg-primary/[0.06] hover:bg-primary/15 hover:border-primary/40 hover:shadow-sm cursor-pointer active:scale-95"
+                                : isBooked
+                                  ? "border border-red-200/60 bg-red-50/80 dark:border-red-900/20 dark:bg-red-950/20 cursor-not-allowed"
+                                  : "border border-border/30 bg-muted/30 cursor-not-allowed"
+                            }`}
+                          >
+                            <span className={`text-xs font-medium ${
+                              isAvailable ? "text-foreground" : isBooked ? "text-red-400 dark:text-red-500/60" : "text-muted-foreground/50"
+                            }`}>
+                              {hour}:00
+                            </span>
+                            {isAvailable && price ? (
+                              <span className="mt-0.5 text-[10px] text-primary font-medium">
+                                {(price / 1000).toFixed(0)}k
+                              </span>
+                            ) : isBooked ? (
+                              <span className="mt-0.5 text-[10px] text-red-400 dark:text-red-500/50">●</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Mobile: compact grid */}
+                    <div className="sm:hidden grid grid-cols-5 gap-1">
+                      {allHours.map((hour) => {
+                        const status = getHourStatus(courtId, hour);
+                        const price = getHourPrice(courtId, hour);
+                        const slot = getAvailableSlot(courtId, hour);
+                        const isAvailable = status === "available" || status === "partial";
+                        const isBooked = status === "booked";
+
+                        return (
+                          <button
+                            key={hour}
+                            disabled={!isAvailable}
+                            onClick={() => slot && handleSlotClick(slot)}
+                            className={`flex flex-col items-center rounded-lg py-1.5 transition-all ${
+                              isAvailable
+                                ? "border border-primary/20 bg-primary/[0.06] active:scale-95"
+                                : isBooked
+                                  ? "border border-red-200/60 bg-red-50/80 dark:border-red-900/20 dark:bg-red-950/20"
+                                  : "border border-border/30 bg-muted/30"
+                            }`}
+                          >
+                            <span className={`text-[11px] font-semibold ${
+                              isAvailable ? "text-foreground" : isBooked ? "text-red-400" : "text-muted-foreground/50"
+                            }`}>
+                              {hour}:00
+                            </span>
+                            {isAvailable && price ? (
+                              <span className="text-[9px] text-primary font-medium">
+                                {(price / 1000).toFixed(0)}k
+                              </span>
+                            ) : isBooked ? (
+                              <span className="text-[9px] text-red-400">●</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            </AnimatePresence>
           </div>
         )}
       </section>
@@ -289,12 +400,9 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
         onOpenChange={(open) => {
           setAuthOpen(open);
           if (!open && selectedSlot) {
-            // After auth modal closes, check if user logged in
             const supabase = createClient();
             supabase.auth.getUser().then(({ data: { user } }) => {
-              if (user) {
-                handleAuthSuccess();
-              }
+              if (user) handleAuthSuccess();
             });
           }
         }}
@@ -311,7 +419,7 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex flex-col items-center gap-4 py-4 text-center"
               >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Check className="h-7 w-7" />
                 </div>
                 <div>
@@ -320,35 +428,29 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
                     Plaćanje se vrši na licu mesta u klubu.
                   </p>
                 </div>
-                <div className="w-full rounded-lg bg-muted/50 p-3 text-sm">
+                <div className="w-full rounded-xl border border-border/50 p-4 text-sm space-y-2 dark:border-white/10">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="capitalize">
                       {format(date, "EEEE, d. MMMM yyyy", { locale: sr })}
                     </span>
                   </div>
-                  <div className="mt-1 ml-6">
-                    {selectedSlot?.slot_start_time.slice(0, 5)} - {selectedSlot?.slot_end_time.slice(0, 5)}
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span>
+                      {selectedSlot?.slot_start_time.slice(0, 5)} - {selectedSlot?.slot_end_time.slice(0, 5)}
+                    </span>
                   </div>
-                  <div className="mt-1 ml-6 font-medium">
-                    {selectedSlot?.court_name}
-                  </div>
+                  <div className="font-medium">{selectedSlot?.court_name}</div>
                 </div>
                 <div className="flex w-full gap-2">
                   <Button
                     className="flex-1"
-                    onClick={() => {
-                      setConfirmOpen(false);
-                      router.push("/bookings");
-                    }}
+                    onClick={() => { setConfirmOpen(false); router.push("/bookings"); }}
                   >
                     Moje rezervacije
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setConfirmOpen(false)}
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => setConfirmOpen(false)}>
                     Zatvori
                   </Button>
                 </div>
@@ -357,14 +459,12 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
               <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <DialogHeader>
                   <DialogTitle>Potvrda rezervacije</DialogTitle>
-                  <DialogDescription>
-                    Proverite detalje pre potvrde
-                  </DialogDescription>
+                  <DialogDescription>Proverite detalje pre potvrde</DialogDescription>
                 </DialogHeader>
 
                 {selectedSlot && (
                   <div className="mt-4 space-y-4">
-                    <div className="rounded-lg border p-4 space-y-3">
+                    <div className="rounded-xl border border-border/50 p-4 space-y-3 dark:border-white/10">
                       {clubName && (
                         <div className="flex items-center gap-2 text-sm">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -410,19 +510,11 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
                     )}
 
                     <div className="flex gap-2">
-                      <Button
-                        className="flex-1"
-                        onClick={handleConfirmBooking}
-                        disabled={booking}
-                      >
+                      <Button className="flex-1" onClick={handleConfirmBooking} disabled={booking}>
                         {booking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Potvrdi rezervaciju
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setConfirmOpen(false)}
-                        disabled={booking}
-                      >
+                      <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={booking}>
                         Otkaži
                       </Button>
                     </div>

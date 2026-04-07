@@ -13,9 +13,9 @@ import {
   Search,
   X,
   Menu,
-  User,
   Building2,
   ChevronDown,
+  Clock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -36,7 +36,7 @@ type UserRole = Database["public"]["Enums"]["user_role"];
 
 interface HeaderClientProps {
   user: { id: string } | null;
-  profile: { full_name: string; role: UserRole } | null;
+  profile: { full_name: string; role: UserRole; avatar_url: string | null } | null;
 }
 
 export function HeaderClient({ user, profile }: HeaderClientProps) {
@@ -59,16 +59,13 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
     setSearchOpen(false);
   }, [pathname]);
 
-  // Keyboard shortcut: Cmd/Ctrl+K for search
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
       }
-      if (e.key === "Escape") {
-        setSearchOpen(false);
-      }
+      if (e.key === "Escape") setSearchOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -93,6 +90,28 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
     .slice(0, 2)
     .toUpperCase();
 
+  // Avatar component used in both trigger and mobile
+  const Avatar = ({ size = 28 }: { size?: number }) => (
+    <div
+      className="relative shrink-0 rounded-full overflow-hidden"
+      style={{ width: size, height: size }}
+    >
+      {profile?.avatar_url ? (
+        <img
+          src={profile.avatar_url}
+          alt={profile.full_name}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#059669] to-[#34d399] text-white font-bold"
+          style={{ fontSize: size * 0.38 }}
+        >
+          {initials}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       <header
@@ -103,7 +122,7 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
         }`}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
-          {/* Logo — ne diraj */}
+          {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
             <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#059669] to-[#C8FC2C] shadow-md shadow-emerald-500/25 transition-all duration-300 group-hover:shadow-lg group-hover:shadow-emerald-500/40 group-hover:scale-105">
               <span className="text-sm font-extrabold text-white leading-none">e</span>
@@ -111,7 +130,7 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
             <span className="text-lg font-extrabold tracking-tight">termini</span>
           </Link>
 
-          {/* Desktop: single nav link */}
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center">
             <Link
               href="/clubs"
@@ -121,10 +140,9 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
             </Link>
           </nav>
 
-          {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Desktop: search trigger */}
+          {/* Desktop search trigger */}
           <button
             onClick={() => setSearchOpen(true)}
             className="group/search hidden md:flex items-center gap-2.5 h-9 w-60 rounded-xl border border-border bg-muted/50 px-3.5 text-sm transition-all duration-200 hover:border-primary/40 hover:bg-muted/80 hover:shadow-sm hover:shadow-primary/5 dark:border-white/15 dark:bg-white/[0.06] dark:hover:border-primary/40 dark:hover:bg-white/10"
@@ -136,7 +154,7 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
             </kbd>
           </button>
 
-          {/* Right side actions */}
+          {/* Right side */}
           <div className="flex items-center gap-2">
             {/* Mobile search */}
             <button
@@ -149,20 +167,37 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
             <ThemeToggle />
 
             {user && profile ? (
-              /* === LOGGED IN: Avatar dropdown === */
+              /* === LOGGED IN: Avatar dropdown (works on all sizes) === */
               <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 py-1 pl-1 pr-2.5 transition-colors hover:bg-muted/70 outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[#059669] to-[#34d399] text-xs font-bold text-white">
-                    {initials}
+                <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 py-1 pl-1 pr-2 sm:pr-2.5 transition-colors hover:bg-muted/70 outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
+                  <div className="relative rounded-full">
+                    <Avatar size={28} />
+                    <BorderBeam
+                      size={30}
+                      duration={4}
+                      colorFrom="#059669"
+                      colorTo="#C8FC2C"
+                      borderWidth={1.5}
+                    />
                   </div>
                   <ChevronDown className="h-3 w-3 text-muted-foreground" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 py-1.5">
-                    <p className="text-sm font-semibold">{profile.full_name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{profile.role === "club_owner" ? "Vlasnik kluba" : profile.role === "admin" ? "Administrator" : "Igrač"}</p>
+                  {/* User info header */}
+                  <div className="flex items-center gap-3 px-2 py-2">
+                    <Avatar size={36} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{profile.full_name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {profile.role === "club_owner" ? "Vlasnik kluba" : profile.role === "admin" ? "Administrator" : "Igrač"}
+                      </p>
+                    </div>
                   </div>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => router.push("/clubs")}>
+                    <Building2 className="mr-2 h-4 w-4" />
+                    Klubovi
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/bookings")}>
                     <Calendar className="mr-2 h-4 w-4" />
                     Moje rezervacije
@@ -188,14 +223,7 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => {
-                      const form = document.createElement("form");
-                      form.action = "/";
-                      form.method = "POST";
-                      document.body.appendChild(form);
-                      // Use server action via fetch
-                      logout();
-                    }}
+                    onClick={() => logout()}
                     className="text-destructive focus:text-destructive"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -205,47 +233,49 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
               </DropdownMenu>
             ) : (
               /* === NOT LOGGED IN === */
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setAuthOpen(true)}
-                  className="hidden sm:inline-flex text-sm font-medium text-muted-foreground transition-colors hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-muted"
-                >
-                  Prijava
-                </button>
-                <ShimmerButton
-                  onClick={() => setAuthOpen(true)}
-                  background="linear-gradient(135deg, #059669, #0ea87a)"
-                  shimmerColor="#C8FC2C"
-                  shimmerSize="0.05em"
-                  borderRadius="10px"
-                  className="h-9 px-4 text-sm font-semibold shadow-lg shadow-emerald-500/20"
-                >
-                  Registracija
-                </ShimmerButton>
-              </div>
-            )}
+              <>
+                <div className="hidden sm:flex items-center gap-2">
+                  <button
+                    onClick={() => setAuthOpen(true)}
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-muted"
+                  >
+                    Prijava
+                  </button>
+                  <ShimmerButton
+                    onClick={() => setAuthOpen(true)}
+                    background="linear-gradient(135deg, #059669, #0ea87a)"
+                    shimmerColor="#C8FC2C"
+                    shimmerSize="0.05em"
+                    borderRadius="10px"
+                    className="h-9 px-4 text-sm font-semibold shadow-lg shadow-emerald-500/20"
+                  >
+                    Registracija
+                  </ShimmerButton>
+                </div>
 
-            {/* Mobile hamburger */}
-            <button
-              onClick={() => setMobileOpen(!mobileOpen)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground hover:bg-muted md:hidden"
-            >
-              {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </button>
+                {/* Mobile hamburger — only for non-logged users */}
+                <button
+                  onClick={() => setMobileOpen(!mobileOpen)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground hover:bg-muted sm:hidden"
+                >
+                  {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* === MOBILE MENU === */}
+        {/* === MOBILE MENU — only for non-logged users === */}
         <AnimatePresence>
-          {mobileOpen && (
+          {mobileOpen && !user && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="overflow-hidden border-t border-border/30 bg-background/95 backdrop-blur-2xl md:hidden"
+              className="overflow-hidden border-t border-border/30 bg-background/95 backdrop-blur-2xl sm:hidden"
             >
-              <div className="p-4 space-y-1">
+              <div className="p-4 space-y-2">
                 <Link
                   href="/clubs"
                   className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -253,49 +283,22 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
                   <Building2 className="mr-2.5 h-4 w-4" />
                   Klubovi
                 </Link>
-                {user && (
-                  <>
-                    <Link
-                      href="/bookings"
-                      className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <Calendar className="mr-2.5 h-4 w-4" />
-                      Rezervacije
-                    </Link>
-                    <Link
-                      href="/favorites"
-                      className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <Heart className="mr-2.5 h-4 w-4" />
-                      Omiljeni
-                    </Link>
-                  </>
-                )}
-                {user && profile && (profile.role === "admin" || profile.role === "club_owner") && (
-                  <Link
-                    href={profile.role === "admin" ? "/admin" : "/dashboard"}
-                    className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                <div className="pt-2 space-y-2 border-t border-border/30">
+                  <ShimmerButton
+                    onClick={() => { setAuthOpen(true); setMobileOpen(false); }}
+                    background="linear-gradient(135deg, #059669, #0ea87a)"
+                    shimmerColor="#C8FC2C"
+                    borderRadius="10px"
+                    className="h-10 w-full text-sm font-semibold"
                   >
-                    {profile.role === "admin" ? (
-                      <Shield className="mr-2.5 h-4 w-4" />
-                    ) : (
-                      <LayoutDashboard className="mr-2.5 h-4 w-4" />
-                    )}
-                    {profile.role === "admin" ? "Admin" : "Dashboard"}
-                  </Link>
-                )}
-                <div className="pt-3 border-t border-border/30">
-                  {!user && (
-                    <ShimmerButton
-                      onClick={() => { setAuthOpen(true); setMobileOpen(false); }}
-                      background="linear-gradient(135deg, #059669, #0ea87a)"
-                      shimmerColor="#C8FC2C"
-                      borderRadius="10px"
-                      className="h-10 w-full text-sm font-semibold"
-                    >
-                      Registracija
-                    </ShimmerButton>
-                  )}
+                    Registracija
+                  </ShimmerButton>
+                  <button
+                    onClick={() => { setAuthOpen(true); setMobileOpen(false); }}
+                    className="w-full rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors border border-border/50"
+                  >
+                    Prijava
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -303,7 +306,7 @@ export function HeaderClient({ user, profile }: HeaderClientProps) {
         </AnimatePresence>
       </header>
 
-      {/* === SEARCH OVERLAY (outside header for proper fixed positioning) === */}
+      {/* === SEARCH OVERLAY === */}
       <AnimatePresence>
         {searchOpen && (
           <>
