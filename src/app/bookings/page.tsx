@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { BlurFade } from "@/components/ui/blur-fade";
 import { BookingsList } from "./bookings-list";
 
 export default async function BookingsPage() {
@@ -25,10 +26,17 @@ export default async function BookingsPage() {
   return (
     <main className="flex-1 px-4 py-8">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight">
-          Moje rezervacije
-        </h1>
-        <BookingsList bookings={bookings ?? []} />
+        <BlurFade>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Moje rezervacije
+          </h1>
+          <p className="mt-1 mb-6 text-sm text-muted-foreground">
+            Pregled svih tvojih rezervacija
+          </p>
+        </BlurFade>
+        <BlurFade delay={0.1}>
+          <BookingsList bookings={bookings ?? []} />
+        </BlurFade>
       </div>
     </main>
   );
