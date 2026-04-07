@@ -14,7 +14,17 @@ export default async function ClubsPage({ searchParams }: ClubsPageProps) {
   const { q, city, sport } = await searchParams;
   const supabase = await createClient();
 
-  // Fetch published clubs with their courts (for sport badges)
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let favoriteIds: string[] = [];
+  if (user) {
+    const { data: favs } = await supabase
+      .from("favorite_clubs")
+      .select("club_id")
+      .eq("user_id", user.id);
+    favoriteIds = favs?.map((f) => f.club_id) ?? [];
+  }
+
   let query = supabase
     .from("clubs")
     .select("id, name, slug, address_street, address_city, courts(sport_type), club_images(image_url, position)")
@@ -78,12 +88,15 @@ export default async function ClubsPage({ searchParams }: ClubsPageProps) {
               return (
                 <ClubCard
                   key={club.id}
+                  clubId={club.id}
                   slug={club.slug}
                   name={club.name}
                   addressStreet={club.address_street}
                   addressCity={club.address_city}
                   sports={sports}
                   imageUrl={firstImage}
+                  isFavorited={favoriteIds.includes(club.id)}
+                  isAuthenticated={!!user}
                 />
               );
             })}

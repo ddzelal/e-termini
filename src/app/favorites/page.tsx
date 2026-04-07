@@ -53,12 +53,15 @@ export default async function FavoritesPage() {
               return (
                 <ClubCard
                   key={club.id}
+                  clubId={club.id}
                   slug={club.slug}
                   name={club.name}
                   addressStreet={club.address_street}
                   addressCity={club.address_city}
                   sports={sports}
                   imageUrl={firstImage}
+                  isFavorited={true}
+                  isAuthenticated={true}
                 />
               );
             })}
