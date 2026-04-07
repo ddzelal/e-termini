@@ -29,6 +29,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // Handle OAuth code exchange — if ?code= is present, redirect to callback
+  const code = request.nextUrl.searchParams.get("code");
+  if (code && !request.nextUrl.pathname.startsWith("/auth/callback")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    // Keep the code param
+    return NextResponse.redirect(url);
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
