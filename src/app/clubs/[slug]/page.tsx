@@ -1,6 +1,29 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MapPin, Phone, Mail, Clock, Users, Layers, Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = await createClient();
+  const { data: club } = await supabase
+    .from("clubs")
+    .select("name, description, address_city")
+    .eq("slug", slug)
+    .eq("is_published", true)
+    .single();
+
+  if (!club) return { title: "Klub nije pronađen" };
+
+  return {
+    title: `${club.name} — Rezerviši teren`,
+    description: club.description || `Rezerviši sportski teren u klubu ${club.name}, ${club.address_city}. Online rezervacija — brzo i jednostavno.`,
+    openGraph: {
+      title: `${club.name} | e-termini`,
+      description: club.description || `Sportski klub u ${club.address_city}`,
+    },
+  };
+}
 import { Badge } from "@/components/ui/badge";
 import { BlurFade } from "@/components/ui/blur-fade";
 import { ClubHeroBackground } from "./club-hero-bg";

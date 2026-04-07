@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BlurFade } from "@/components/ui/blur-fade";
 import { BookingsList } from "./bookings-list";
+
+export const metadata: Metadata = {
+  title: "Moje rezervacije",
+  description: "Pregled svih tvojih rezervacija sportskih terena.",
+};
 
 export default async function BookingsPage() {
   const supabase = await createClient();

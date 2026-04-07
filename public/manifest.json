@@ -1,0 +1,16 @@
+{
+  "name": "e-termini",
+  "short_name": "e-termini",
+  "description": "Pronađi i rezerviši sportski teren",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafdf7",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

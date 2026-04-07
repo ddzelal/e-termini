@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ClubsSearch } from "./clubs-search";
+
+export const metadata: Metadata = {
+  title: "Klubovi — Pronađi sportski teren",
+  description: "Pretraži sportske klubove u Srbiji. Fudbal, tenis, padel, košarka i više. Rezerviši termin online.",
+};
 import { ClubGrid } from "./club-grid";
 import { BlurFade } from "@/components/ui/blur-fade";
 import type { Database } from "@/lib/database.types";

@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ClubCard } from "@/components/club-card";
 import type { Database } from "@/lib/database.types";
+
+export const metadata: Metadata = {
+  title: "Omiljeni klubovi",
+  description: "Tvoji omiljeni sportski klubovi.",
+};
 
 type SportType = Database["public"]["Enums"]["sport_type"];
 
