@@ -25,22 +25,12 @@ export const metadata: Metadata = {
   },
   description:
     "Platforma za rezervaciju sportskih terena u Srbiji. Pronađi klub, izaberi slobodan termin i rezerviši online — brzo, jednostavno, besplatno.",
-  keywords: [
-    "sportski tereni",
-    "rezervacija terena",
-    "fudbal",
-    "tenis",
-    "padel",
-    "košarka",
-    "Srbija",
-    "Beograd",
-    "Novi Sad",
-    "booking",
-    "e-termini",
-  ],
   authors: [{ name: "e-termini" }],
   creator: "e-termini",
   metadataBase: new URL(SITE_URL),
+  alternates: {
+    canonical: SITE_URL,
+  },
   openGraph: {
     type: "website",
     locale: "sr_RS",
@@ -49,12 +39,21 @@ export const metadata: Metadata = {
     title: "e-termini | Pronađi i rezerviši sportski teren",
     description:
       "Platforma za rezervaciju sportskih terena u Srbiji. Pronađi klub, izaberi slobodan termin i rezerviši online.",
+    images: [
+      {
+        url: `${SITE_URL}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "e-termini — Pronađi i rezerviši sportski teren",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "e-termini | Pronađi i rezerviši sportski teren",
     description:
       "Platforma za rezervaciju sportskih terena u Srbiji. Pronađi klub, izaberi slobodan termin i rezerviši online.",
+    images: [`${SITE_URL}/og-image.png`],
   },
   robots: {
     index: true,

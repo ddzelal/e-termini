@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { MapPin, Heart, ImageOff } from "lucide-react";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
-import { GlareHover } from "@/components/ui/glare-hover";
 import { AuthModal } from "@/components/auth-modal";
 import { toggleFavorite } from "@/lib/favorite-actions";
 import { SPORT_LABELS } from "@/lib/constants";
@@ -16,7 +13,15 @@ type SportType = Database["public"]["Enums"]["sport_type"];
 
 function CardImage({ imageUrl, name }: { imageUrl?: string | null; name: string }) {
   const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // Handle cached images that don't fire onLoad
+  useEffect(() => {
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
+      setLoaded(true);
+    }
+  }, []);
 
   if (!imageUrl || error) {
     return (
@@ -35,15 +40,19 @@ function CardImage({ imageUrl, name }: { imageUrl?: string | null; name: string 
 
   return (
     <>
-      {loading && (
+      {!loaded && (
         <div className="absolute inset-0 animate-pulse bg-muted" />
       )}
       <img
+        ref={imgRef}
         src={imageUrl}
         alt={name}
-        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        width={800}
+        height={500}
+        loading="lazy"
+        className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-105 ${loaded ? "opacity-100" : "opacity-0"}`}
         onError={() => setError(true)}
-        onLoad={() => setLoading(false)}
+        onLoad={() => setLoaded(true)}
       />
     </>
   );
@@ -75,7 +84,6 @@ export function ClubCard({
   const [favorited, setFavorited] = useState(isFavorited);
   const [animating, setAnimating] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  const router = useRouter();
 
   async function handleFavorite(e: React.MouseEvent) {
     e.preventDefault();
@@ -100,16 +108,7 @@ export function ClubCard({
   return (
     <>
       <Link href={`/clubs/${slug}`} className="block">
-        <GlareHover
-          color="#059669"
-          opacity={0.12}
-          angle={-35}
-          duration={500}
-          width="100%"
-          className="rounded-2xl"
-          background="transparent"
-        >
-          <div className="group w-full overflow-hidden rounded-2xl border border-border/50 bg-card transition-shadow duration-300 hover:shadow-lg hover:shadow-primary/5 dark:border-white/10 dark:hover:border-white/15">
+          <div className="group w-full overflow-hidden rounded-2xl border border-border/50 bg-card transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 dark:border-white/10 dark:hover:border-white/20">
             {/* Image */}
             <div className="relative aspect-[16/10] overflow-hidden bg-muted">
               <CardImage imageUrl={imageUrl} name={name} />
@@ -162,7 +161,6 @@ export function ClubCard({
               </p>
             </div>
           </div>
-        </GlareHover>
       </Link>
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
