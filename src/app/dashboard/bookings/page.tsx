@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerClubs } from "@/lib/dashboard-helpers";
+import { BlurFade } from "@/components/ui/blur-fade";
 import { BookingsTable } from "./bookings-table";
 
 interface BookingsPageProps {
@@ -12,7 +13,6 @@ export default async function DashboardBookingsPage({ searchParams }: BookingsPa
   const supabase = await createClient();
   const clubIds = clubs.map((c) => c.id);
 
-  // Also fetch courts for manual booking form
   const { data: courts } = await supabase
     .from("courts")
     .select("id, name, club_id, sport_type")
@@ -40,14 +40,40 @@ export default async function DashboardBookingsPage({ searchParams }: BookingsPa
 
   const { data: bookings } = await query;
 
+  // Stats
+  const confirmed = bookings?.filter((b) => b.status === "confirmed").length ?? 0;
+  const totalRevenue = bookings?.filter((b) => b.payment_status === "paid").reduce((s, b) => s + b.total_price, 0) ?? 0;
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Rezervacije</h1>
-      <BookingsTable
-        bookings={bookings ?? []}
-        clubs={clubs}
-        courts={courts ?? []}
-      />
+      <BlurFade>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Rezervacije</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Upravljaj svim rezervacijama tvojih klubova
+            </p>
+          </div>
+          <div className="hidden sm:flex items-center gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Aktivne: </span>
+              <span className="font-bold text-primary">{confirmed}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Prihod: </span>
+              <span className="font-bold">{totalRevenue.toLocaleString()} RSD</span>
+            </div>
+          </div>
+        </div>
+      </BlurFade>
+
+      <BlurFade delay={0.05}>
+        <BookingsTable
+          bookings={bookings ?? []}
+          clubs={clubs}
+          courts={courts ?? []}
+        />
+      </BlurFade>
     </div>
   );
 }

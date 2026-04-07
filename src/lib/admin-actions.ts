@@ -98,12 +98,13 @@ export async function assignOwner(clubId: string, ownerId: string | null) {
 
   if (error) return { error: error.message };
 
-  // If new owner set, make them club_owner
+  // If new owner set, make them club_owner (but never downgrade an admin)
   if (ownerId) {
     await supabase
       .from("profiles")
       .update({ role: "club_owner" })
-      .eq("id", ownerId);
+      .eq("id", ownerId)
+      .neq("role", "admin");
   }
 
   // If previous owner removed, check if they still own any clubs

@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { LayoutDashboard, CalendarDays, Calendar, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { buttonVariants } from "@/components/ui/button";
+import { DashboardNav } from "./dashboard-nav";
 
 export default async function DashboardLayout({
   children,
@@ -15,7 +13,7 @@ export default async function DashboardLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", user.id)
     .single();
 
@@ -23,34 +21,10 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const navItems = [
-    { href: "/dashboard", label: "Pregled", icon: LayoutDashboard },
-    { href: "/dashboard/bookings", label: "Rezervacije", icon: CalendarDays },
-    { href: "/dashboard/schedule", label: "Raspored", icon: Calendar },
-    { href: "/dashboard/club", label: "Moj klub", icon: Building2 },
-  ];
-
   return (
-    <div className="flex-1 flex flex-col md:flex-row">
-      <aside className="border-b md:border-b-0 md:border-r md:w-56 shrink-0">
-        <nav className="flex md:flex-col gap-1 p-2 overflow-x-auto md:overflow-visible">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={buttonVariants({
-                variant: "ghost",
-                size: "sm",
-                className: "justify-start gap-2 whitespace-nowrap",
-              })}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
-      <main className="flex-1 p-4 md:p-6">{children}</main>
+    <div className="flex-1 flex flex-col lg:flex-row">
+      <DashboardNav role={profile.role} fullName={profile.full_name} />
+      <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8">{children}</main>
     </div>
   );
 }

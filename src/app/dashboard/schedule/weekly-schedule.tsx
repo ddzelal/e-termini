@@ -1,23 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+import { format, addDays, startOfWeek, isSameDay, isToday } from "date-fns";
 import { sr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 
-interface Court {
-  id: string;
-  name: string;
-  club_id: string;
-  sport_type: string;
-}
-
-interface Club {
-  id: string;
-  name: string;
-}
+interface Court { id: string; name: string; club_id: string; sport_type: string }
+interface Club { id: string; name: string }
 
 interface SlotData {
   court_id: string;
@@ -28,7 +19,12 @@ interface SlotData {
   slot_price: number;
 }
 
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8:00 - 22:00
+const SPORT_ICONS: Record<string, string> = {
+  football: "⚽", basketball: "🏀", tennis: "🎾", padel: "🏓",
+  volleyball: "🏐", handball: "🤾", futsal: "⚽", other: "🏅",
+};
+
+const HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
 
 export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court[] }) {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -73,12 +69,13 @@ export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        {/* Club selector */}
         {clubs.length > 1 && (
           <select
-            className="h-8 rounded-md border bg-background px-2 text-sm"
+            className="h-9 rounded-xl border border-border/50 bg-background px-3 text-sm dark:border-white/15"
             value={selectedClub}
             onChange={(e) => setSelectedClub(e.target.value)}
           >
@@ -88,100 +85,128 @@ export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court
           </select>
         )}
 
+        {/* Week navigator */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon-sm"
+          <button
             onClick={() => setWeekStart(addDays(weekStart, -7))}
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/50 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted dark:border-white/15"
           >
             <ChevronLeft className="h-4 w-4" />
-          </Button>
+          </button>
           <span className="min-w-[200px] text-center text-sm font-medium">
             {format(days[0], "d. MMM", { locale: sr })} — {format(days[6], "d. MMM yyyy", { locale: sr })}
           </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
+          <button
             onClick={() => setWeekStart(addDays(weekStart, 7))}
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/50 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted dark:border-white/15"
           >
             <ChevronRight className="h-4 w-4" />
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Legend */}
-      <div className="flex gap-4 text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded bg-green-100 border border-green-200 dark:bg-green-950 dark:border-green-900" />
+          <div className="h-3 w-5 rounded-sm border border-primary/30 bg-primary/10" />
           Slobodno
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded bg-red-100 border border-red-200 dark:bg-red-950 dark:border-red-900" />
+          <div className="h-3 w-5 rounded-sm border border-red-200 bg-red-100 dark:border-red-900/40 dark:bg-red-950/40" />
           Zauzeto
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded bg-muted border" />
-          Blokirano
+          <div className="h-3 w-5 rounded-sm bg-muted border border-border/50" />
+          Zatvoreno
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16">
+        <div className="flex justify-center py-20">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
+      ) : filteredCourts.length === 0 ? (
+        <div className="rounded-2xl border border-dashed py-16 text-center">
+          <div className="text-3xl mb-2">🏟️</div>
+          <p className="font-medium">Nema terena</p>
+        </div>
       ) : (
-        <div className="overflow-x-auto">
+        <motion.div
+          key={`${weekStart.toISOString()}-${selectedClub}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-6"
+        >
           {filteredCourts.map((court) => (
-            <div key={court.id} className="mb-6">
-              <h3 className="mb-2 text-sm font-semibold">{court.name}</h3>
-              <div className="min-w-[700px]">
-                {/* Header row */}
-                <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-px text-xs">
-                  <div />
-                  {days.map((day) => (
-                    <div
-                      key={day.toISOString()}
-                      className={`py-1 text-center font-medium capitalize ${
-                        isSameDay(day, new Date()) ? "text-primary" : "text-muted-foreground"
-                      }`}
-                    >
-                      {format(day, "EEE d.", { locale: sr })}
-                    </div>
-                  ))}
-                </div>
+            <div key={court.id} className="rounded-2xl border border-border/50 p-4 dark:border-white/10">
+              {/* Court header */}
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-base leading-none">{SPORT_ICONS[court.sport_type] ?? "🏅"}</span>
+                <h3 className="text-sm font-semibold">{court.name}</h3>
+              </div>
 
-                {/* Hour rows */}
-                {HOURS.map((hour) => (
-                  <div key={hour} className="grid grid-cols-[80px_repeat(7,1fr)] gap-px">
-                    <div className="py-1 pr-2 text-right text-xs text-muted-foreground">
-                      {hour}:00
-                    </div>
+              {/* Grid */}
+              <div className="overflow-x-auto -mx-1 px-1">
+                <div className="min-w-[600px]">
+                  {/* Day headers */}
+                  <div className="grid grid-cols-[50px_repeat(7,1fr)] gap-0.5 mb-1">
+                    <div />
                     {days.map((day) => {
-                      const dateStr = format(day, "yyyy-MM-dd");
-                      const status = getSlotStatus(court.id, dateStr, hour);
+                      const today = isSameDay(day, new Date());
                       return (
                         <div
-                          key={dateStr}
-                          className={`h-7 rounded-sm border text-[10px] flex items-center justify-center ${
-                            status === "available"
-                              ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"
-                              : status === "booked"
-                                ? "bg-red-50 border-red-200 text-red-500 dark:bg-red-950/30 dark:border-red-900/50"
-                                : status === "blocked"
-                                  ? "bg-muted border-muted-foreground/20 text-muted-foreground"
-                                  : "bg-muted/30 border-muted"
+                          key={day.toISOString()}
+                          className={`py-1.5 text-center rounded-lg text-[11px] font-medium ${
+                            today
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground"
                           }`}
                         >
-                          {status === "booked" && "●"}
+                          <div className="capitalize">{format(day, "EEE", { locale: sr })}</div>
+                          <div className={`text-sm font-bold ${today ? "" : "text-foreground"}`}>
+                            {format(day, "d")}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
-                ))}
+
+                  {/* Hour rows */}
+                  {HOURS.map((hour) => (
+                    <div key={hour} className="grid grid-cols-[50px_repeat(7,1fr)] gap-0.5">
+                      <div className="flex items-center justify-end pr-2 text-[10px] text-muted-foreground/70">
+                        {hour}:00
+                      </div>
+                      {days.map((day) => {
+                        const dateStr = format(day, "yyyy-MM-dd");
+                        const status = getSlotStatus(court.id, dateStr, hour);
+                        const today = isSameDay(day, new Date());
+
+                        return (
+                          <div
+                            key={dateStr}
+                            className={`h-8 rounded-md flex items-center justify-center text-[10px] font-medium transition-colors ${
+                              status === "available"
+                                ? `border border-primary/20 bg-primary/[0.06] ${today ? "border-primary/30 bg-primary/10" : ""}`
+                                : status === "booked"
+                                  ? "border border-red-200/50 bg-red-50 text-red-500 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-400"
+                                  : status === "blocked"
+                                    ? "bg-muted/50 text-muted-foreground/40 border border-border/30"
+                                    : "bg-muted/20 border border-transparent"
+                            }`}
+                          >
+                            {status === "booked" && "●"}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   );

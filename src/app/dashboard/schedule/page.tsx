@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getOwnerClubs } from "@/lib/dashboard-helpers";
+import { BlurFade } from "@/components/ui/blur-fade";
 import { WeeklySchedule } from "./weekly-schedule";
 
 export default async function SchedulePage() {
@@ -16,11 +17,17 @@ export default async function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Nedeljni raspored</h1>
-      <WeeklySchedule
-        clubs={clubs}
-        courts={courts ?? []}
-      />
+      <BlurFade>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Raspored</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Nedeljni pregled zauzetosti terena
+          </p>
+        </div>
+      </BlurFade>
+      <BlurFade delay={0.05}>
+        <WeeklySchedule clubs={clubs} courts={courts ?? []} />
+      </BlurFade>
     </div>
   );
 }
