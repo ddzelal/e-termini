@@ -21,11 +21,11 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://e-termini.com";
 
 export const metadata: Metadata = {
   title: {
-    default: "e-termini | Pronađi i rezerviši sportski teren",
+    default: "e-termini — Pronađi i rezerviši sportski teren u Srbiji",
     template: "%s | e-termini",
   },
   description:
-    "Platforma za rezervaciju sportskih terena u Srbiji. Pronađi klub, izaberi slobodan termin i rezerviši online — brzo, jednostavno, besplatno.",
+    "Pronađi sportski klub u tvom gradu, izaberi slobodan termin i rezerviši online. Fudbal, tenis, padel, košarka — brzo, jednostavno i besplatno.",
   authors: [{ name: "e-termini" }],
   creator: "e-termini",
   metadataBase: new URL(SITE_URL),
@@ -37,12 +37,12 @@ export const metadata: Metadata = {
     locale: "sr_RS",
     url: SITE_URL,
     siteName: "e-termini",
-    title: "e-termini | Pronađi i rezerviši sportski teren",
+    title: "e-termini — Pronađi i rezerviši sportski teren u Srbiji",
     description:
-      "Platforma za rezervaciju sportskih terena u Srbiji. Pronađi klub, izaberi slobodan termin i rezerviši online.",
+      "Pronađi sportski klub u tvom gradu, izaberi slobodan termin i rezerviši online. Fudbal, tenis, padel, košarka — brzo, jednostavno i besplatno.",
     images: [
       {
-        url: `${SITE_URL}/og-image.png`,
+        url: `${SITE_URL}/opengraph-image`,
         width: 1200,
         height: 630,
         alt: "e-termini — Pronađi i rezerviši sportski teren",
@@ -51,10 +51,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "e-termini | Pronađi i rezerviši sportski teren",
+    title: "e-termini — Pronađi i rezerviši sportski teren u Srbiji",
     description:
-      "Platforma za rezervaciju sportskih terena u Srbiji. Pronađi klub, izaberi slobodan termin i rezerviši online.",
-    images: [`${SITE_URL}/og-image.png`],
+      "Pronađi sportski klub u tvom gradu, izaberi slobodan termin i rezerviši online. Fudbal, tenis, padel, košarka — brzo, jednostavno i besplatno.",
+    images: [`${SITE_URL}/opengraph-image`],
   },
   robots: {
     index: true,
