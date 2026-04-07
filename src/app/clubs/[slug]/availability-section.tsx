@@ -6,6 +6,7 @@ import { format, addDays, subDays } from "date-fns";
 import { sr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Loader2, Check, Calendar, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -119,6 +120,14 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
       setBookingResult("error");
     } else {
       setBookingResult("success");
+      // Fire confetti celebration
+      const end = Date.now() + 500;
+      const frame = () => {
+        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } });
+        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 } });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
       // Refresh availability
       const supabase = createClient();
       const { data } = await supabase.rpc("get_club_availability", {
@@ -229,14 +238,23 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
                     {SPORT_LABELS[court.sport]}
                   </Badge>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <motion.div
+                  className="flex flex-wrap gap-2"
+                  initial="hidden"
+                  animate="visible"
+                  variants={{ visible: { transition: { staggerChildren: 0.02 } } }}
+                >
                   {court.slots.map((slot) => {
                     const isAvailable = slot.slot_status === "available";
                     const isBooked = slot.slot_status === "booked";
 
                     return (
-                      <button
+                      <motion.button
                         key={`${courtId}-${slot.slot_start_time}`}
+                        variants={{
+                          hidden: { opacity: 0, scale: 0.8 },
+                          visible: { opacity: 1, scale: 1 },
+                        }}
                         onClick={() => isAvailable && handleSlotClick(slot)}
                         disabled={!isAvailable}
                         className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
@@ -255,10 +273,10 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
                               ? "Blokirano"
                               : `${slot.slot_price.toLocaleString()} RSD`}
                         </div>
-                      </button>
+                      </motion.button>
                     );
                   })}
-                </div>
+                </motion.div>
               </div>
             ))}
           </div>

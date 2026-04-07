@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { MagicCard } from "@/components/ui/magic-card";
 import { SPORT_LABELS } from "@/lib/constants";
 import type { Database } from "@/lib/database.types";
 
@@ -25,7 +28,10 @@ export function ClubCard({
   imageUrl,
 }: ClubCardProps) {
   return (
-    <div className="group overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md">
+    <MagicCard
+      className="group overflow-hidden rounded-xl p-0"
+      gradientColor="oklch(0.55 0.18 155 / 0.08)"
+    >
       {/* Image placeholder */}
       <div className="relative aspect-[16/10] bg-muted">
         {imageUrl ? (
@@ -35,7 +41,7 @@ export function ClubCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-4xl text-muted-foreground/30">
+          <div className="flex h-full items-center justify-center text-4xl text-muted-foreground/20 font-bold">
             {name.charAt(0)}
           </div>
         )}
@@ -70,6 +76,6 @@ export function ClubCard({
           Rezerviši
         </Link>
       </div>
-    </div>
+    </MagicCard>
   );
 }

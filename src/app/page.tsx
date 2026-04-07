@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Search, Calendar, Trophy } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { ClubCard } from "@/components/club-card";
+import { HeroSection, HowItWorks } from "@/components/hero-section";
+import { SportsMarquee } from "@/components/sports-marquee";
 import type { Database } from "@/lib/database.types";
 
 type SportType = Database["public"]["Enums"]["sport_type"];
@@ -18,23 +19,9 @@ export default async function HomePage() {
 
   return (
     <main className="flex-1">
-      {/* Hero */}
-      <section className="flex flex-col items-center justify-center gap-6 px-4 py-24 text-center md:py-32">
-        <h1 className="text-4xl font-bold tracking-tight md:text-6xl">
-          Pronađi i rezerviši
-          <br />
-          <span className="text-primary">sportski teren</span>
-        </h1>
-        <p className="max-w-md text-lg text-muted-foreground">
-          Pretraži klubove u tvom gradu, izaberi termin i rezerviši — brzo i
-          jednostavno.
-        </p>
-        <div className="flex gap-3">
-          <Link href="/clubs" className={buttonVariants({ size: "lg" })}>
-            Pretraži klubove
-          </Link>
-        </div>
-      </section>
+      <HeroSection />
+
+      <SportsMarquee />
 
       {/* Popular clubs */}
       {clubs && clubs.length > 0 && (
@@ -78,43 +65,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* How it works */}
-      <section className="border-t bg-muted/50 px-4 py-16">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="mb-12 text-center text-2xl font-semibold">
-            Kako funkcioniše
-          </h2>
-          <div className="grid gap-8 md:grid-cols-3">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <Search className="h-5 w-5" />
-              </div>
-              <h3 className="font-semibold">Pronađi</h3>
-              <p className="text-sm text-muted-foreground">
-                Pretraži klubove po gradu, sportu ili imenu.
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <h3 className="font-semibold">Rezerviši</h3>
-              <p className="text-sm text-muted-foreground">
-                Izaberi slobodan termin i potvrdi rezervaciju.
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <Trophy className="h-5 w-5" />
-              </div>
-              <h3 className="font-semibold">Igraj</h3>
-              <p className="text-sm text-muted-foreground">
-                Dođi u klub, plati na licu mesta i uživaj u igri.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <HowItWorks />
     </main>
   );
 }
