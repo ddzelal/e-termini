@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { format, addDays, startOfWeek, isSameDay, isToday } from "date-fns";
+import { useCallback, useEffect, useState } from "react";
+import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { sr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, CalendarX } from "lucide-react";
 import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { CloseCourtDialog } from "./close-court-dialog";
 
 interface Court { id: string; name: string; club_id: string; sport_type: string }
 interface Club { id: string; name: string }
@@ -31,33 +33,35 @@ export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court
   const [selectedClub, setSelectedClub] = useState(clubs[0]?.id ?? "");
   const [dayData, setDayData] = useState<Record<string, SlotData[]>>({});
   const [loading, setLoading] = useState(true);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const filteredCourts = courts.filter((c) => c.club_id === selectedClub);
 
-  useEffect(() => {
-    async function fetchWeek() {
-      setLoading(true);
-      const supabase = createClient();
-      const results: Record<string, SlotData[]> = {};
+  const fetchWeek = useCallback(async () => {
+    if (!selectedClub) return;
+    setLoading(true);
+    const supabase = createClient();
+    const results: Record<string, SlotData[]> = {};
 
-      await Promise.all(
-        days.map(async (day) => {
-          const dateStr = format(day, "yyyy-MM-dd");
-          const { data } = await supabase.rpc("get_club_availability", {
-            p_club_id: selectedClub,
-            p_date: dateStr,
-          });
-          results[dateStr] = (data as SlotData[]) ?? [];
-        })
-      );
+    await Promise.all(
+      Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(async (day) => {
+        const dateStr = format(day, "yyyy-MM-dd");
+        const { data } = await supabase.rpc("get_club_availability", {
+          p_club_id: selectedClub,
+          p_date: dateStr,
+        });
+        results[dateStr] = (data as SlotData[]) ?? [];
+      })
+    );
 
-      setDayData(results);
-      setLoading(false);
-    }
-
-    if (selectedClub) fetchWeek();
+    setDayData(results);
+    setLoading(false);
   }, [weekStart, selectedClub]);
+
+  useEffect(() => {
+    fetchWeek();
+  }, [fetchWeek]);
 
   function getSlotStatus(courtId: string, dateStr: string, hour: number): string {
     const slots = dayData[dateStr] ?? [];
@@ -103,7 +107,26 @@ export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Close court action */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCloseDialogOpen(true)}
+          disabled={filteredCourts.length === 0}
+          className="ml-auto"
+        >
+          <CalendarX className="mr-1.5 h-4 w-4" />
+          Zatvori teren
+        </Button>
       </div>
+
+      <CloseCourtDialog
+        open={closeDialogOpen}
+        onOpenChange={setCloseDialogOpen}
+        courts={filteredCourts}
+        onClosed={fetchWeek}
+      />
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -186,6 +209,7 @@ export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court
                         return (
                           <div
                             key={dateStr}
+                            title={status === "past" ? "Prošlo vreme" : undefined}
                             className={`h-8 rounded-md flex items-center justify-center text-[10px] font-medium transition-colors ${
                               status === "available"
                                 ? `border border-primary/20 bg-primary/[0.06] ${today ? "border-primary/30 bg-primary/10" : ""}`
@@ -193,7 +217,9 @@ export function WeeklySchedule({ clubs, courts }: { clubs: Club[]; courts: Court
                                   ? "border border-red-200/50 bg-red-50 text-red-500 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-400"
                                   : status === "blocked"
                                     ? "bg-muted/50 text-muted-foreground/40 border border-border/30"
-                                    : "bg-muted/20 border border-transparent"
+                                    : status === "past"
+                                      ? "bg-muted/10 text-muted-foreground/30 border border-dashed border-border/40"
+                                      : "bg-muted/20 border border-transparent"
                             }`}
                           >
                             {status === "booked" && "●"}

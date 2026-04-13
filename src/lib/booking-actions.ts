@@ -12,6 +12,43 @@ interface CreateBookingParams {
   totalPrice: number;
 }
 
+interface LocalNow {
+  date: string; // YYYY-MM-DD in club timezone
+  minutes: number; // minutes since midnight in club timezone
+}
+
+function getLocalNow(timezone: string): LocalNow {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    minutes: parseInt(get("hour"), 10) * 60 + parseInt(get("minute"), 10),
+  };
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":");
+  return parseInt(h, 10) * 60 + parseInt(m, 10);
+}
+
+function addDaysISO(dateISO: string, days: number): string {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
 export async function createBooking(params: CreateBookingParams) {
   const supabase = await createClient();
 
@@ -21,6 +58,47 @@ export async function createBooking(params: CreateBookingParams) {
 
   if (!user) {
     return { error: "Morate biti prijavljeni da biste rezervisali termin." };
+  }
+
+  // Club booking policy: mode, lead time, max advance window, timezone
+  const { data: club } = await supabase
+    .from("clubs")
+    .select("booking_mode, min_booking_lead_minutes, max_booking_advance_days, phone, timezone")
+    .eq("id", params.clubId)
+    .single();
+
+  if (!club) {
+    return { error: "Klub nije pronađen." };
+  }
+
+  if (club.booking_mode === "owner_only") {
+    const phoneHint = club.phone ? ` Pozovite: ${club.phone}` : "";
+    return {
+      error: `Ovaj klub prima rezervacije telefonski.${phoneHint}`,
+    };
+  }
+
+  const localNow = getLocalNow(club.timezone);
+  const slotMinutes = timeToMinutes(params.startTime);
+
+  if (params.date < localNow.date) {
+    return { error: "Termin je u prošlosti." };
+  }
+
+  if (params.date === localNow.date) {
+    const minAllowedMinutes = localNow.minutes + club.min_booking_lead_minutes;
+    if (slotMinutes < minAllowedMinutes) {
+      return {
+        error: `Rezervacija mora biti najmanje ${club.min_booking_lead_minutes} minuta unapred.`,
+      };
+    }
+  }
+
+  const maxAllowedDate = addDaysISO(localNow.date, club.max_booking_advance_days);
+  if (params.date > maxAllowedDate) {
+    return {
+      error: `Rezervacije su moguće najviše ${club.max_booking_advance_days} dana unapred.`,
+    };
   }
 
   // Double-check availability before booking

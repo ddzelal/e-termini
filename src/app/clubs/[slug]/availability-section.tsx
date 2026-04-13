@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays, isToday, isBefore, startOfDay } from "date-fns";
+import { format, addDays, isToday, startOfDay } from "date-fns";
 import { sr } from "date-fns/locale";
-import { Loader2, Check, Calendar, MapPin, Clock } from "lucide-react";
+import { Loader2, Check, Calendar, MapPin, Clock, Phone, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -24,6 +24,7 @@ import { AuthModal } from "@/components/auth-modal";
 import type { Database } from "@/lib/database.types";
 
 type SportType = Database["public"]["Enums"]["sport_type"];
+type BookingMode = Database["public"]["Enums"]["booking_mode_type"];
 
 interface Slot {
   court_id: string;
@@ -33,13 +34,15 @@ interface Slot {
   slot_end_time: string;
   slot_duration_minutes: number;
   slot_price: number;
-  slot_status: "available" | "booked" | "blocked";
+  slot_status: "available" | "booked" | "blocked" | "past";
 }
 
 interface AvailabilitySectionProps {
   clubId: string;
   clubName?: string;
   sports: SportType[];
+  bookingMode: BookingMode;
+  clubPhone?: string | null;
 }
 
 const SPORT_ICONS: Record<string, string> = {
@@ -47,7 +50,14 @@ const SPORT_ICONS: Record<string, string> = {
   volleyball: "🏐", handball: "🤾", futsal: "⚽", other: "🏅",
 };
 
-export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySectionProps) {
+export function AvailabilitySection({
+  clubId,
+  clubName,
+  sports,
+  bookingMode,
+  clubPhone,
+}: AvailabilitySectionProps) {
+  const isOwnerOnly = bookingMode === "owner_only";
   const router = useRouter();
   const [date, setDate] = useState(new Date());
   const [selectedSport, setSelectedSport] = useState<string | undefined>(undefined);
@@ -60,6 +70,7 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
   const [booking, setBooking] = useState(false);
   const [bookingResult, setBookingResult] = useState<"success" | "error" | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [showPast, setShowPast] = useState(false);
 
   // Generate next 7 days for date picker
   const days = useMemo(() => {
@@ -111,17 +122,48 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
     return [...hourSet].sort((a, b) => a - b);
   }, [courts]);
 
+  // An hour is "past everywhere" if every court treats it as past
+  const pastHoursCount = useMemo(() => {
+    let count = 0;
+    for (const hour of allHours) {
+      const allPast = Object.keys(courts).every((courtId) => {
+        const slots = courts[courtId]?.hours[hour];
+        return slots && slots.length > 0 && slots.every((s) => s.slot_status === "past");
+      });
+      if (allPast) count++;
+    }
+    return count;
+  }, [allHours, courts]);
+
+  // Hours visible after the "show past" toggle
+  const visibleHours = useMemo(() => {
+    if (showPast) return allHours;
+    return allHours.filter((hour) => {
+      // Keep the hour if at least one court has a non-past slot for it
+      return Object.keys(courts).some((courtId) => {
+        const slots = courts[courtId]?.hours[hour];
+        return slots?.some((s) => s.slot_status !== "past");
+      });
+    });
+  }, [allHours, courts, showPast]);
+
   // Get hour status: check all slots within that hour
-  function getHourStatus(courtId: string, hour: number): "available" | "booked" | "blocked" | "partial" {
+  function getHourStatus(
+    courtId: string,
+    hour: number
+  ): "available" | "booked" | "blocked" | "past" | "partial" {
     const hourSlots = courts[courtId]?.hours[hour];
     if (!hourSlots || hourSlots.length === 0) return "blocked";
 
     const statuses = hourSlots.map((s) => s.slot_status);
+    if (statuses.every((s) => s === "past")) return "past";
     if (statuses.every((s) => s === "booked")) return "booked";
     if (statuses.every((s) => s === "blocked")) return "blocked";
     if (statuses.every((s) => s === "available")) return "available";
-    // Mix of available + booked/blocked
-    return statuses.some((s) => s === "available") ? "partial" : "booked";
+    // Mix — if any available, show as partial; otherwise treat as past > booked > blocked
+    if (statuses.some((s) => s === "available")) return "partial";
+    if (statuses.some((s) => s === "past")) return "past";
+    return "booked";
   }
 
   // Get first available slot for a given hour
@@ -138,6 +180,7 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
   }
 
   async function handleSlotClick(slot: Slot) {
+    if (isOwnerOnly) return;
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -263,6 +306,29 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
           </div>
         )}
 
+        {/* Owner-only booking notice */}
+        {isOwnerOnly && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-3.5 sm:p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <Phone className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Rezervacije telefonom</p>
+              <p className="text-xs text-muted-foreground leading-snug">
+                Ovaj klub prima rezervacije pozivom. Pogledajte dostupnost i pozovite klub za potvrdu termina.
+              </p>
+            </div>
+            {clubPhone && (
+              <a
+                href={`tel:${clubPhone}`}
+                className={buttonVariants({ size: "sm", className: "shrink-0" })}
+              >
+                Pozovi
+              </a>
+            )}
+          </div>
+        )}
+
         {/* Timeline grid */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -276,20 +342,48 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Legend */}
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <div className="h-3 w-6 rounded-sm border border-primary/30 bg-primary/10" />
-                Slobodno
+            {/* Legend + show past toggle */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-6 rounded-sm border border-primary/30 bg-primary/10" />
+                  Slobodno
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-6 rounded-sm border border-red-200 bg-red-100 dark:border-red-900/30 dark:bg-red-950/30" />
+                  Zauzeto
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-6 rounded-sm bg-muted border border-border/50" />
+                  Blokirano
+                </div>
+                {showPast && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-3 w-6 rounded-sm border border-dashed border-border/60 bg-muted/20" />
+                    Prošlo
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-3 w-6 rounded-sm border border-red-200 bg-red-100 dark:border-red-900/30 dark:bg-red-950/30" />
-                Zauzeto
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-3 w-6 rounded-sm bg-muted border border-border/50" />
-                Blokirano
-              </div>
+
+              {pastHoursCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowPast((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-lg border border-border/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground dark:border-white/10"
+                >
+                  {showPast ? (
+                    <>
+                      <EyeOff className="h-3 w-3" />
+                      Sakrij prošle ({pastHoursCount})
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-3 w-3" />
+                      Prikaži prošle ({pastHoursCount})
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Per court timeline */}
@@ -309,30 +403,61 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
                       <h3 className="font-semibold text-sm">{court.name}</h3>
                     </div>
 
-                    {/* Desktop: horizontal grid */}
-                    <div className="hidden sm:grid gap-1.5" style={{ gridTemplateColumns: `repeat(${allHours.length}, minmax(0, 1fr))` }}>
-                      {allHours.map((hour) => {
+                    {visibleHours.length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">
+                        Svi termini za danas su prošli.{" "}
+                        <button
+                          type="button"
+                          onClick={() => setShowPast(true)}
+                          className="text-primary hover:underline"
+                        >
+                          Prikaži ih
+                        </button>
+                      </p>
+                    )}
+
+                    {/* Desktop: wrapping grid (8 cols on sm, 12 on md+) */}
+                    <div className="hidden sm:grid sm:grid-cols-8 md:grid-cols-12 gap-1.5">
+                      {visibleHours.map((hour) => {
                         const status = getHourStatus(courtId, hour);
                         const price = getHourPrice(courtId, hour);
                         const slot = getAvailableSlot(courtId, hour);
                         const isAvailable = status === "available" || status === "partial";
                         const isBooked = status === "booked";
+                        const isPast = status === "past";
+                        const isClickable = isAvailable && !isOwnerOnly;
+                        const title = isPast
+                          ? "Prošlo vreme"
+                          : isOwnerOnly && isAvailable
+                            ? "Rezervacija telefonom"
+                            : undefined;
 
                         return (
                           <button
                             key={hour}
-                            disabled={!isAvailable}
+                            disabled={!isClickable}
                             onClick={() => slot && handleSlotClick(slot)}
+                            title={title}
                             className={`group relative flex flex-col items-center rounded-xl py-2.5 px-1 text-center transition-all ${
-                              isAvailable
+                              isClickable
                                 ? "border border-primary/20 bg-primary/[0.06] hover:bg-primary/15 hover:border-primary/40 hover:shadow-sm cursor-pointer active:scale-95"
-                                : isBooked
-                                  ? "border border-red-200/60 bg-red-50/80 dark:border-red-900/20 dark:bg-red-950/20 cursor-not-allowed"
-                                  : "border border-border/30 bg-muted/30 cursor-not-allowed"
+                                : isAvailable
+                                  ? "border border-primary/20 bg-primary/[0.06] cursor-not-allowed opacity-80"
+                                  : isBooked
+                                    ? "border border-red-200/60 bg-red-50/80 dark:border-red-900/20 dark:bg-red-950/20 cursor-not-allowed"
+                                    : isPast
+                                      ? "border border-dashed border-border/50 bg-muted/20 cursor-not-allowed"
+                                      : "border border-border/30 bg-muted/30 cursor-not-allowed"
                             }`}
                           >
                             <span className={`text-xs font-medium ${
-                              isAvailable ? "text-foreground" : isBooked ? "text-red-400 dark:text-red-500/60" : "text-muted-foreground/50"
+                              isAvailable
+                                ? "text-foreground"
+                                : isBooked
+                                  ? "text-red-400 dark:text-red-500/60"
+                                  : isPast
+                                    ? "text-muted-foreground/40 line-through decoration-1"
+                                    : "text-muted-foreground/50"
                             }`}>
                               {hour}:00
                             </span>
@@ -350,28 +475,46 @@ export function AvailabilitySection({ clubId, clubName, sports }: AvailabilitySe
 
                     {/* Mobile: compact grid */}
                     <div className="sm:hidden grid grid-cols-5 gap-1">
-                      {allHours.map((hour) => {
+                      {visibleHours.map((hour) => {
                         const status = getHourStatus(courtId, hour);
                         const price = getHourPrice(courtId, hour);
                         const slot = getAvailableSlot(courtId, hour);
                         const isAvailable = status === "available" || status === "partial";
                         const isBooked = status === "booked";
+                        const isPast = status === "past";
+                        const isClickable = isAvailable && !isOwnerOnly;
+                        const title = isPast
+                          ? "Prošlo vreme"
+                          : isOwnerOnly && isAvailable
+                            ? "Rezervacija telefonom"
+                            : undefined;
 
                         return (
                           <button
                             key={hour}
-                            disabled={!isAvailable}
+                            disabled={!isClickable}
                             onClick={() => slot && handleSlotClick(slot)}
+                            title={title}
                             className={`flex flex-col items-center rounded-lg py-1.5 transition-all ${
-                              isAvailable
+                              isClickable
                                 ? "border border-primary/20 bg-primary/[0.06] active:scale-95"
-                                : isBooked
-                                  ? "border border-red-200/60 bg-red-50/80 dark:border-red-900/20 dark:bg-red-950/20"
-                                  : "border border-border/30 bg-muted/30"
+                                : isAvailable
+                                  ? "border border-primary/20 bg-primary/[0.06] opacity-80"
+                                  : isBooked
+                                    ? "border border-red-200/60 bg-red-50/80 dark:border-red-900/20 dark:bg-red-950/20"
+                                    : isPast
+                                      ? "border border-dashed border-border/50 bg-muted/20"
+                                      : "border border-border/30 bg-muted/30"
                             }`}
                           >
                             <span className={`text-[11px] font-semibold ${
-                              isAvailable ? "text-foreground" : isBooked ? "text-red-400" : "text-muted-foreground/50"
+                              isAvailable
+                                ? "text-foreground"
+                                : isBooked
+                                  ? "text-red-400"
+                                  : isPast
+                                    ? "text-muted-foreground/40 line-through decoration-1"
+                                    : "text-muted-foreground/50"
                             }`}>
                               {hour}:00
                             </span>

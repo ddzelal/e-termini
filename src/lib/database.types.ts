@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
@@ -207,8 +209,10 @@ export type Database = {
         Row: {
           address_city: string
           address_country: string
+          address_country_code: string | null
           address_postal_code: string | null
           address_street: string
+          booking_mode: Database["public"]["Enums"]["booking_mode_type"]
           created_at: string
           description: string | null
           email: string | null
@@ -216,18 +220,23 @@ export type Database = {
           is_published: boolean
           latitude: number | null
           longitude: number | null
+          max_booking_advance_days: number
+          min_booking_lead_minutes: number
           name: string
           owner_id: string | null
           phone: string | null
           slug: string
+          timezone: string
           updated_at: string
           website: string | null
         }
         Insert: {
           address_city: string
           address_country?: string
+          address_country_code?: string | null
           address_postal_code?: string | null
           address_street: string
+          booking_mode?: Database["public"]["Enums"]["booking_mode_type"]
           created_at?: string
           description?: string | null
           email?: string | null
@@ -235,18 +244,23 @@ export type Database = {
           is_published?: boolean
           latitude?: number | null
           longitude?: number | null
+          max_booking_advance_days?: number
+          min_booking_lead_minutes?: number
           name: string
           owner_id?: string | null
           phone?: string | null
           slug: string
+          timezone?: string
           updated_at?: string
           website?: string | null
         }
         Update: {
           address_city?: string
           address_country?: string
+          address_country_code?: string | null
           address_postal_code?: string | null
           address_street?: string
+          booking_mode?: Database["public"]["Enums"]["booking_mode_type"]
           created_at?: string
           description?: string | null
           email?: string | null
@@ -254,10 +268,13 @@ export type Database = {
           is_published?: boolean
           latitude?: number | null
           longitude?: number | null
+          max_booking_advance_days?: number
+          min_booking_lead_minutes?: number
           name?: string
           owner_id?: string | null
           phone?: string | null
           slug?: string
+          timezone?: string
           updated_at?: string
           website?: string | null
         }
@@ -267,6 +284,50 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      court_closures: {
+        Row: {
+          affected_booking_count: number
+          court_id: string
+          created_at: string
+          created_by: string
+          end_date: string
+          id: string
+          notify_affected: boolean
+          reason: string
+          start_date: string
+        }
+        Insert: {
+          affected_booking_count?: number
+          court_id: string
+          created_at?: string
+          created_by: string
+          end_date: string
+          id?: string
+          notify_affected?: boolean
+          reason: string
+          start_date: string
+        }
+        Update: {
+          affected_booking_count?: number
+          court_id?: string
+          created_at?: string
+          created_by?: string
+          end_date?: string
+          id?: string
+          notify_affected?: boolean
+          reason?: string
+          start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_closures_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
             referencedColumns: ["id"]
           },
         ]
@@ -462,6 +523,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_court_closure: {
+        Args: {
+          p_court_id: string
+          p_end_date: string
+          p_notify?: boolean
+          p_reason: string
+          p_start_date: string
+        }
+        Returns: Json
+      }
       get_available_slots: {
         Args: { p_court_id: string; p_date: string }
         Returns: {
@@ -506,6 +577,7 @@ export type Database = {
         | "air_conditioning"
         | "heating"
       booked_by_type: "player" | "club_owner" | "admin"
+      booking_mode_type: "owner_only" | "self_service"
       booking_status: "confirmed" | "cancelled" | "completed" | "no_show"
       payment_status: "pending" | "paid"
       sport_type:
@@ -650,3 +722,52 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      amenity_type: [
+        "parking",
+        "free_parking",
+        "changing_room",
+        "showers",
+        "lockers",
+        "wifi",
+        "cafeteria",
+        "restaurant",
+        "equipment_rental",
+        "store",
+        "disabled_access",
+        "lighting",
+        "covered",
+        "air_conditioning",
+        "heating",
+      ],
+      booked_by_type: ["player", "club_owner", "admin"],
+      booking_mode_type: ["owner_only", "self_service"],
+      booking_status: ["confirmed", "cancelled", "completed", "no_show"],
+      payment_status: ["pending", "paid"],
+      sport_type: [
+        "football",
+        "basketball",
+        "tennis",
+        "padel",
+        "volleyball",
+        "handball",
+        "futsal",
+        "other",
+      ],
+      surface_type: [
+        "grass",
+        "artificial_grass",
+        "concrete",
+        "parquet",
+        "clay",
+        "rubber",
+        "sand",
+        "other",
+      ],
+      user_role: ["player", "club_owner", "admin"],
+    },
+  },
+} as const

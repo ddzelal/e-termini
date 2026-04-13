@@ -1,8 +1,55 @@
 "use server";
 
 import { redirect } from "next/navigation";
+// @ts-expect-error tz-lookup ships without bundled types
+import tzLookup from "tz-lookup";
 import { createClient } from "@/lib/supabase/server";
+import { timezoneForCountry } from "@/lib/timezones";
 import type { Database } from "@/lib/database.types";
+
+function resolveTimezone(
+  latitude: number | null,
+  longitude: number | null,
+  country: string | null
+): string {
+  if (latitude !== null && longitude !== null) {
+    try {
+      return tzLookup(latitude, longitude) as string;
+    } catch {
+      // tz-lookup throws for invalid coordinates; fall through to country mapping
+    }
+  }
+  return timezoneForCountry(country);
+}
+
+function parseFloatOrNull(value: FormDataEntryValue | null): number | null {
+  if (value === null || value === "") return null;
+  const parsed = parseFloat(value as string);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function emptyToNull(value: FormDataEntryValue | null): string | null {
+  const str = (value as string | null)?.trim() ?? "";
+  return str.length > 0 ? str : null;
+}
+
+type BookingMode = Database["public"]["Enums"]["booking_mode_type"];
+
+function parseBookingMode(value: FormDataEntryValue | null): BookingMode {
+  return value === "self_service" ? "self_service" : "owner_only";
+}
+
+function parseIntWithBounds(
+  value: FormDataEntryValue | null,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  if (value === null || value === "") return fallback;
+  const parsed = parseInt(value as string, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
 
 function slugify(text: string): string {
   return text
@@ -18,23 +65,43 @@ function slugify(text: string): string {
 export async function createClub(formData: FormData) {
   const supabase = await createClient();
   const name = formData.get("name") as string;
+  const country = (formData.get("address_country") as string) || "Serbia";
+  const latitude = parseFloatOrNull(formData.get("latitude"));
+  const longitude = parseFloatOrNull(formData.get("longitude"));
+  const timezone = resolveTimezone(latitude, longitude, country);
 
   const { data, error } = await supabase
     .from("clubs")
     .insert({
       name,
       slug: slugify(name) + "-" + Date.now().toString(36),
-      description: (formData.get("description") as string) || null,
-      phone: (formData.get("phone") as string) || null,
-      email: (formData.get("email") as string) || null,
-      website: (formData.get("website") as string) || null,
+      description: emptyToNull(formData.get("description")),
+      phone: emptyToNull(formData.get("phone")),
+      email: emptyToNull(formData.get("email")),
+      website: emptyToNull(formData.get("website")),
       address_street: formData.get("address_street") as string,
       address_city: formData.get("address_city") as string,
-      address_postal_code: (formData.get("address_postal_code") as string) || null,
-      latitude: formData.get("latitude") ? parseFloat(formData.get("latitude") as string) : null,
-      longitude: formData.get("longitude") ? parseFloat(formData.get("longitude") as string) : null,
+      address_country: country,
+      address_country_code: emptyToNull(formData.get("address_country_code")),
+      address_postal_code: emptyToNull(formData.get("address_postal_code")),
+      latitude,
+      longitude,
       is_published: formData.get("is_published") === "true",
-      owner_id: (formData.get("owner_id") as string) || null,
+      owner_id: emptyToNull(formData.get("owner_id")),
+      timezone,
+      booking_mode: parseBookingMode(formData.get("booking_mode")),
+      min_booking_lead_minutes: parseIntWithBounds(
+        formData.get("min_booking_lead_minutes"),
+        30,
+        0,
+        1440
+      ),
+      max_booking_advance_days: parseIntWithBounds(
+        formData.get("max_booking_advance_days"),
+        30,
+        1,
+        365
+      ),
     })
     .select("id")
     .single();
@@ -52,21 +119,41 @@ export async function createClub(formData: FormData) {
 
 export async function updateClub(clubId: string, formData: FormData) {
   const supabase = await createClient();
+  const country = (formData.get("address_country") as string) || "Serbia";
+  const latitude = parseFloatOrNull(formData.get("latitude"));
+  const longitude = parseFloatOrNull(formData.get("longitude"));
+  const timezone = resolveTimezone(latitude, longitude, country);
 
   const { error } = await supabase
     .from("clubs")
     .update({
       name: formData.get("name") as string,
-      description: (formData.get("description") as string) || null,
-      phone: (formData.get("phone") as string) || null,
-      email: (formData.get("email") as string) || null,
-      website: (formData.get("website") as string) || null,
+      description: emptyToNull(formData.get("description")),
+      phone: emptyToNull(formData.get("phone")),
+      email: emptyToNull(formData.get("email")),
+      website: emptyToNull(formData.get("website")),
       address_street: formData.get("address_street") as string,
       address_city: formData.get("address_city") as string,
-      address_postal_code: (formData.get("address_postal_code") as string) || null,
-      latitude: formData.get("latitude") ? parseFloat(formData.get("latitude") as string) : null,
-      longitude: formData.get("longitude") ? parseFloat(formData.get("longitude") as string) : null,
+      address_country: country,
+      address_country_code: emptyToNull(formData.get("address_country_code")),
+      address_postal_code: emptyToNull(formData.get("address_postal_code")),
+      latitude,
+      longitude,
       is_published: formData.get("is_published") === "true",
+      timezone,
+      booking_mode: parseBookingMode(formData.get("booking_mode")),
+      min_booking_lead_minutes: parseIntWithBounds(
+        formData.get("min_booking_lead_minutes"),
+        30,
+        0,
+        1440
+      ),
+      max_booking_advance_days: parseIntWithBounds(
+        formData.get("max_booking_advance_days"),
+        30,
+        1,
+        365
+      ),
     })
     .eq("id", clubId);
 

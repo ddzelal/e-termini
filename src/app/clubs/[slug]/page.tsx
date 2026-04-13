@@ -172,6 +172,8 @@ export default async function ClubPage({ params }: ClubPageProps) {
                 clubId={club.id}
                 clubName={club.name}
                 sports={sports}
+                bookingMode={club.booking_mode}
+                clubPhone={club.phone}
               />
             </BlurFade>
 

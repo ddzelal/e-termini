@@ -103,3 +103,74 @@ export async function createBlockedSlot(formData: FormData) {
   if (error) return { error: error.message };
   return { success: true };
 }
+
+interface AffectedBooking {
+  booking_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  player_name: string | null;
+  player_phone: string | null;
+  total_price: number;
+}
+
+export async function createCourtClosure(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Niste prijavljeni." };
+
+  const courtId = formData.get("courtId") as string;
+  const startDate = formData.get("startDate") as string;
+  const endDate = formData.get("endDate") as string;
+  const reason = ((formData.get("reason") as string) ?? "").trim();
+  const notify = formData.get("notify") === "true";
+
+  if (!courtId || !startDate || !endDate) {
+    return { error: "Obavezna polja nedostaju." };
+  }
+  if (!reason) return { error: "Razlog je obavezan." };
+
+  const { data, error } = await supabase.rpc("create_court_closure", {
+    p_court_id: courtId,
+    p_start_date: startDate,
+    p_end_date: endDate,
+    p_reason: reason,
+    p_notify: notify,
+  });
+
+  if (error) return { error: error.message };
+
+  const payload = data as unknown as {
+    closure_id: string;
+    affected_count: number;
+    affected_bookings: AffectedBooking[];
+  };
+
+  return {
+    success: true,
+    closureId: payload.closure_id,
+    affectedCount: payload.affected_count,
+    affected: payload.affected_bookings ?? [],
+  };
+}
+
+export async function listCourtClosures(courtId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("court_closures")
+    .select("*")
+    .eq("court_id", courtId)
+    .order("start_date", { ascending: false });
+  if (error) return { error: error.message };
+  return { closures: data ?? [] };
+}
+
+export async function deleteCourtClosure(closureId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("court_closures")
+    .delete()
+    .eq("id", closureId);
+  if (error) return { error: error.message };
+  return { success: true };
+}
