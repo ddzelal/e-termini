@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, CalendarDays, Calendar, Building2, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Calendar, Building2, ArrowLeft, ShieldBan } from "lucide-react";
 
 interface DashboardNavProps {
   role: string;
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/dashboard/bookings", label: "Rezervacije", icon: CalendarDays },
   { href: "/dashboard/schedule", label: "Raspored", icon: Calendar },
   { href: "/dashboard/club", label: "Moj klub", icon: Building2 },
+  { href: "/dashboard/blacklist", label: "Blokirani", icon: ShieldBan },
 ];
 
 export function DashboardNav({ role, fullName }: DashboardNavProps) {

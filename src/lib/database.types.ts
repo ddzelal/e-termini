@@ -173,6 +173,55 @@ export type Database = {
           },
         ]
       }
+      club_blacklist: {
+        Row: {
+          club_id: string
+          created_at: string
+          created_by: string
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          club_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_blacklist_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "club_blacklist_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "club_blacklist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_images: {
         Row: {
           club_id: string
@@ -722,52 +771,3 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      amenity_type: [
-        "parking",
-        "free_parking",
-        "changing_room",
-        "showers",
-        "lockers",
-        "wifi",
-        "cafeteria",
-        "restaurant",
-        "equipment_rental",
-        "store",
-        "disabled_access",
-        "lighting",
-        "covered",
-        "air_conditioning",
-        "heating",
-      ],
-      booked_by_type: ["player", "club_owner", "admin"],
-      booking_mode_type: ["owner_only", "self_service"],
-      booking_status: ["confirmed", "cancelled", "completed", "no_show"],
-      payment_status: ["pending", "paid"],
-      sport_type: [
-        "football",
-        "basketball",
-        "tennis",
-        "padel",
-        "volleyball",
-        "handball",
-        "futsal",
-        "other",
-      ],
-      surface_type: [
-        "grass",
-        "artificial_grass",
-        "concrete",
-        "parquet",
-        "clay",
-        "rubber",
-        "sand",
-        "other",
-      ],
-      user_role: ["player", "club_owner", "admin"],
-    },
-  },
-} as const

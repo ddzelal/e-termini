@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { MAX_ACTIVE_BOOKINGS, MAX_NOSHOW_COUNT, NOSHOW_WINDOW_DAYS } from "@/lib/constants";
 
 interface CreateBookingParams {
   courtId: string;
@@ -10,43 +11,6 @@ interface CreateBookingParams {
   endTime: string;
   durationMinutes: number;
   totalPrice: number;
-}
-
-interface LocalNow {
-  date: string; // YYYY-MM-DD in club timezone
-  minutes: number; // minutes since midnight in club timezone
-}
-
-function getLocalNow(timezone: string): LocalNow {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-
-  const get = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? "00";
-
-  return {
-    date: `${get("year")}-${get("month")}-${get("day")}`,
-    minutes: parseInt(get("hour"), 10) * 60 + parseInt(get("minute"), 10),
-  };
-}
-
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":");
-  return parseInt(h, 10) * 60 + parseInt(m, 10);
-}
-
-function addDaysISO(dateISO: string, days: number): string {
-  const [y, m, d] = dateISO.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10);
 }
 
 export async function createBooking(params: CreateBookingParams) {
@@ -60,44 +24,46 @@ export async function createBooking(params: CreateBookingParams) {
     return { error: "Morate biti prijavljeni da biste rezervisali termin." };
   }
 
-  // Club booking policy: mode, lead time, max advance window, timezone
-  const { data: club } = await supabase
-    .from("clubs")
-    .select("booking_mode, min_booking_lead_minutes, max_booking_advance_days, phone, timezone")
-    .eq("id", params.clubId)
-    .single();
+  // Check if user is blacklisted for this club
+  const { data: blacklisted } = await supabase
+    .from("club_blacklist")
+    .select("id")
+    .eq("club_id", params.clubId)
+    .eq("user_id", user.id)
+    .limit(1);
 
-  if (!club) {
-    return { error: "Klub nije pronađen." };
+  if (blacklisted && blacklisted.length > 0) {
+    return { error: "Vaš nalog je blokiran od strane ovog kluba i ne možete rezervisati termine. Za više informacija pozovite klub direktno." };
   }
 
-  if (club.booking_mode === "owner_only") {
-    const phoneHint = club.phone ? ` Pozovite: ${club.phone}` : "";
+  // Check active bookings limit
+  const today = new Date().toISOString().split("T")[0];
+  const { count: activeCount } = await supabase
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "confirmed")
+    .gte("date", today);
+
+  if (activeCount !== null && activeCount >= MAX_ACTIVE_BOOKINGS) {
     return {
-      error: `Ovaj klub prima rezervacije telefonski.${phoneHint}`,
+      error: `Imate maksimalan broj aktivnih rezervacija (${MAX_ACTIVE_BOOKINGS}). Otkazite ili sačekajte da prođe neka.`,
     };
   }
 
-  const localNow = getLocalNow(club.timezone);
-  const slotMinutes = timeToMinutes(params.startTime);
+  // Check no-show count in last 30 days
+  const windowDate = new Date();
+  windowDate.setDate(windowDate.getDate() - NOSHOW_WINDOW_DAYS);
+  const { count: noShowCount } = await supabase
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "no_show")
+    .gte("date", windowDate.toISOString().split("T")[0]);
 
-  if (params.date < localNow.date) {
-    return { error: "Termin je u prošlosti." };
-  }
-
-  if (params.date === localNow.date) {
-    const minAllowedMinutes = localNow.minutes + club.min_booking_lead_minutes;
-    if (slotMinutes < minAllowedMinutes) {
-      return {
-        error: `Rezervacija mora biti najmanje ${club.min_booking_lead_minutes} minuta unapred.`,
-      };
-    }
-  }
-
-  const maxAllowedDate = addDaysISO(localNow.date, club.max_booking_advance_days);
-  if (params.date > maxAllowedDate) {
+  if (noShowCount !== null && noShowCount >= MAX_NOSHOW_COUNT) {
     return {
-      error: `Rezervacije su moguće najviše ${club.max_booking_advance_days} dana unapred.`,
+      error: "Vaše rezervacije su privremeno onemogućene zbog nepojavljivanja. Kontaktirajte klub.",
     };
   }
 

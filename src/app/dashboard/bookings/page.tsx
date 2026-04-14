@@ -24,7 +24,7 @@ export default async function DashboardBookingsPage({ searchParams }: BookingsPa
     .from("bookings")
     .select(`
       id, date, start_time, end_time, duration_minutes, total_price,
-      status, payment_status, booked_by, guest_name, guest_phone, notes,
+      status, payment_status, booked_by, guest_name, guest_phone, notes, user_id,
       clubs(id, name),
       courts(id, name, sport_type),
       profiles(full_name, phone)
@@ -40,9 +40,32 @@ export default async function DashboardBookingsPage({ searchParams }: BookingsPa
 
   const { data: bookings } = await query;
 
+  // Count no-shows per user in last 30 days for badge display
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const userIds = [...new Set(bookings?.map((b) => b.user_id).filter(Boolean) as string[])];
+  const noShowCounts: Record<string, number> = {};
+  if (userIds.length > 0) {
+    const { data: noShows } = await supabase
+      .from("bookings")
+      .select("user_id")
+      .in("user_id", userIds)
+      .eq("status", "no_show")
+      .gte("date", thirtyDaysAgo.toISOString().split("T")[0]);
+    noShows?.forEach((ns) => {
+      if (ns.user_id) noShowCounts[ns.user_id] = (noShowCounts[ns.user_id] || 0) + 1;
+    });
+  }
+  const enrichedBookings = bookings?.map((b) => ({
+    ...b,
+    profiles: b.profiles
+      ? { ...b.profiles, no_show_count: b.user_id ? noShowCounts[b.user_id] || 0 : 0 }
+      : null,
+  })) ?? [];
+
   // Stats
-  const confirmed = bookings?.filter((b) => b.status === "confirmed").length ?? 0;
-  const totalRevenue = bookings?.filter((b) => b.payment_status === "paid").reduce((s, b) => s + b.total_price, 0) ?? 0;
+  const confirmed = enrichedBookings.filter((b) => b.status === "confirmed").length;
+  const totalRevenue = enrichedBookings.filter((b) => b.payment_status === "paid").reduce((s, b) => s + b.total_price, 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -69,7 +92,7 @@ export default async function DashboardBookingsPage({ searchParams }: BookingsPa
 
       <BlurFade delay={0.05}>
         <BookingsTable
-          bookings={bookings ?? []}
+          bookings={enrichedBookings}
           clubs={clubs}
           courts={courts ?? []}
         />

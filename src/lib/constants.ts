@@ -53,3 +53,7 @@ export const DAY_LABELS = [
   "Subota",
   "Nedelja",
 ];
+
+export const MAX_ACTIVE_BOOKINGS = 5;
+export const MAX_NOSHOW_COUNT = 3;
+export const NOSHOW_WINDOW_DAYS = 30;

@@ -6,7 +6,7 @@ import { format, parseISO, isToday } from "date-fns";
 import { sr } from "date-fns/locale";
 import {
   Loader2, Plus, Ban, CheckCircle, XCircle, Clock,
-  DollarSign, User, Calendar, Filter,
+  DollarSign, User, Calendar, Filter, ShieldBan, AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,14 @@ import {
   updatePaymentStatus,
   createManualBooking,
 } from "@/lib/dashboard-actions";
+import { addToBlacklist } from "@/lib/blacklist-actions";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Booking {
   id: string;
@@ -40,9 +48,10 @@ interface Booking {
   guest_name: string | null;
   guest_phone: string | null;
   notes: string | null;
+  user_id: string | null;
   clubs: { id: string; name: string } | null;
   courts: { id: string; name: string; sport_type: string } | null;
-  profiles: { full_name: string; phone: string | null } | null;
+  profiles: { full_name: string; phone: string | null; no_show_count?: number } | null;
 }
 
 interface Club { id: string; name: string }
@@ -68,6 +77,10 @@ export function BookingsTable({ bookings, clubs, courts }: { bookings: Booking[]
   const [creating, setCreating] = useState(false);
   const [selectedClub, setSelectedClub] = useState(clubs[0]?.id ?? "");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [blacklistTarget, setBlacklistTarget] = useState<{ userId: string; clubId: string; name: string } | null>(null);
+  const [blacklistReason, setBlacklistReason] = useState("");
+  const [blacklisting, setBlacklisting] = useState(false);
+  const [blacklistError, setBlacklistError] = useState<string | null>(null);
 
   const filtered = statusFilter === "all" ? bookings : bookings.filter((b) => b.status === statusFilter);
 
@@ -98,6 +111,30 @@ export function BookingsTable({ bookings, clubs, courts }: { bookings: Booking[]
       setShowNewBooking(false);
       router.refresh();
     }
+  }
+
+  function closeBlacklistDialog() {
+    setBlacklistTarget(null);
+    setBlacklistReason("");
+    setBlacklistError(null);
+  }
+
+  async function handleBlacklist() {
+    if (!blacklistTarget) return;
+    setBlacklisting(true);
+    setBlacklistError(null);
+    const result = await addToBlacklist(blacklistTarget.clubId, blacklistTarget.userId, blacklistReason);
+    setBlacklisting(false);
+    if (result.error) {
+      setBlacklistError(result.error);
+      return;
+    }
+    const msg = result.cancelledCount && result.cancelledCount > 0
+      ? `Korisnik blokiran. ${result.cancelledCount} aktivna rezervacija je automatski otkazana.`
+      : "Korisnik blokiran.";
+    closeBlacklistDialog();
+    alert(msg);
+    router.refresh();
   }
 
   const filteredCourts = courts.filter((c) => c.club_id === selectedClub);
@@ -191,6 +228,19 @@ export function BookingsTable({ bookings, clubs, courts }: { bookings: Booking[]
                           <User className="h-3 w-3" />
                           <span className="truncate">{playerName}</span>
                           {playerPhone && <span className="hidden sm:inline">· {playerPhone}</span>}
+                          {b.profiles?.no_show_count && b.profiles.no_show_count >= 2 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                                  <AlertTriangle className="h-2.5 w-2.5" />
+                                  {b.profiles.no_show_count}x
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {b.profiles.no_show_count} nepojavljivanja u poslednjih 30 dana
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
                       </div>
 
@@ -271,6 +321,32 @@ export function BookingsTable({ bookings, clubs, courts }: { bookings: Booking[]
                         {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                       </div>
                     )}
+
+                    {/* Blokiraj — visible for all non-cancelled bookings */}
+                    {b.clubs && b.status !== "cancelled" && (
+                      <div className={`${b.status !== "confirmed" ? "mt-3" : "mt-1.5"} flex`}>
+                        {b.user_id ? (
+                          <button
+                            onClick={() =>
+                              setBlacklistTarget({
+                                userId: b.user_id!,
+                                clubId: b.clubs!.id,
+                                name: playerName,
+                              })
+                            }
+                            className="flex items-center gap-1 rounded-lg border border-red-200/50 px-2.5 py-1 text-[11px] font-medium text-red-500 transition-colors hover:bg-red-50 dark:border-red-900/20 dark:hover:bg-red-950/20"
+                          >
+                            <ShieldBan className="h-3 w-3" />
+                            Blokiraj korisnika
+                          </button>
+                        ) : (
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60 italic">
+                            <ShieldBan className="h-3 w-3" />
+                            Gost — blokiraj sa stranice Blokirani
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -278,6 +354,51 @@ export function BookingsTable({ bookings, clubs, courts }: { bookings: Booking[]
           })}
         </div>
       )}
+
+      {/* Blacklist dialog */}
+      <Dialog open={!!blacklistTarget} onOpenChange={(open) => { if (!open) closeBlacklistDialog(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Blokiraj korisnika</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 mt-2">
+            <p className="text-sm text-muted-foreground">
+              Da li ste sigurni da želite da blokirate <strong>{blacklistTarget?.name}</strong>?
+              Blokirani korisnik neće moći da rezerviše termine u vašem klubu.
+            </p>
+            <div className="grid gap-1.5">
+              <Label>Razlog (opciono)</Label>
+              <Textarea
+                value={blacklistReason}
+                onChange={(e) => setBlacklistReason(e.target.value)}
+                placeholder="Npr. višestruko nepojavljivanje..."
+                className="rounded-xl resize-none"
+                rows={2}
+              />
+            </div>
+            {blacklistError && (
+              <p className="text-sm text-destructive">{blacklistError}</p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={closeBlacklistDialog}
+                className="rounded-xl"
+              >
+                Odustani
+              </Button>
+              <Button
+                onClick={handleBlacklist}
+                disabled={blacklisting}
+                className="rounded-xl bg-red-600 hover:bg-red-700 text-white"
+              >
+                {blacklisting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Blokiraj
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* New booking dialog */}
       <Dialog open={showNewBooking} onOpenChange={setShowNewBooking}>
